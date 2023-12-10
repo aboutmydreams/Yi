@@ -19,7 +19,7 @@ def to_device(batch, device):
         try:
             output[k] = v.to(device)
         except Exception as e:
-            print(str(e))
+            print(e)
             output[k] = v
     return output
 
@@ -55,14 +55,9 @@ def load_hf_tokenizer(model_name_or_path, fast_tokenizer=False):
         model_json = os.path.join(model_name_or_path, "config.json")
         if os.path.exists(model_json):
             json.load(open(model_json))
-            tokenizer = get_tokenizer(model_name_or_path, fast_tokenizer=fast_tokenizer)
-        else:
-            tokenizer = get_tokenizer(model_name_or_path, fast_tokenizer=fast_tokenizer)
     else:
         print("tokenizer path not exist")
-        tokenizer = get_tokenizer(model_name_or_path, fast_tokenizer=fast_tokenizer)
-
-    return tokenizer
+    return get_tokenizer(model_name_or_path, fast_tokenizer=fast_tokenizer)
 
 
 def save_hf_format(model, tokenizer, args, sub_folder=""):
@@ -117,7 +112,7 @@ def load_state_dict_into_model(
         args = (state_dict, prefix, local_metadata, True, [], [], error_msgs)
         # Parameters of module and children will start with prefix. We can exit early if there are none in this
         # state_dict
-        if len([key for key in state_dict if key.startswith(prefix)]) > 0:
+        if [key for key in state_dict if key.startswith(prefix)]:
             if zero_stage == 3:
                 # In sharded models, each shard has only part of the full state_dict, so only gather
                 # parameters that are in the current state_dict.
@@ -129,7 +124,7 @@ def load_state_dict_into_model(
                     for k in state_dict.keys()
                     if k in named_parameters
                 ]
-                if len(params_to_gather) > 0:
+                if params_to_gather:
                     # because zero3 puts placeholders in model params, this context
                     # manager gathers (unpartitions) the params of the current layer, then loads from
                     # the state dict and then re-partitions them again
@@ -165,11 +160,9 @@ def get_optimizer_grouped_parameters(
             "params": [
                 p
                 for n, p in model.named_parameters()
-                if (
-                    not any(nd in n for nd in no_decay_name_list)
-                    and p.requires_grad
-                    and not any(nd in n for nd in lora_name_list)
-                )
+                if all(nd not in n for nd in no_decay_name_list)
+                and p.requires_grad
+                and all(nd not in n for nd in lora_name_list)
             ],
             "weight_decay": weight_decay,
         },
@@ -177,11 +170,9 @@ def get_optimizer_grouped_parameters(
             "params": [
                 p
                 for n, p in model.named_parameters()
-                if (
-                    not any(nd in n for nd in no_decay_name_list)
-                    and p.requires_grad
-                    and any(nd in n for nd in lora_name_list)
-                )
+                if all(nd not in n for nd in no_decay_name_list)
+                and p.requires_grad
+                and any(nd in n for nd in lora_name_list)
             ],
             "weight_decay": weight_decay,
             "lr": lora_lr,
@@ -190,7 +181,10 @@ def get_optimizer_grouped_parameters(
             "params": [
                 p
                 for n, p in model.named_parameters()
-                if (any(nd in n for nd in no_decay_name_list) and p.requires_grad)
+                if (
+                    any(nd in n for nd in no_decay_name_list)
+                    and p.requires_grad
+                )
             ],
             "weight_decay": 0.0,
         },
